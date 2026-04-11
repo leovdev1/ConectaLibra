@@ -3,6 +3,7 @@ import { Languages } from "lucide-react";
 interface TranslationBoxProps {
   text: string;
   isActive: boolean;
+  isLoading?: boolean;
 }
 
 const TranslationBox = ({ text, isActive }: TranslationBoxProps) => {

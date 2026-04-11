@@ -80,7 +80,7 @@ const Index = () => {
       <main className="container max-w-3xl mx-auto px-4 py-8 flex flex-col gap-6 animate-fade-in-up">
         <VideoCapture isActive={isTranslating} />
 
-        <TranslationBox text={translationText} isActive={isTranslating} />
+        <TranslationBox text={translationText} isActive={isTranslating} isLoading={isLoading} />
 
         {/* Action buttons */}
         <div className="flex gap-3 justify-center">
