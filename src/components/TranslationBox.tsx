@@ -6,7 +6,7 @@ interface TranslationBoxProps {
   isLoading?: boolean;
 }
 
-const TranslationBox = ({ text, isActive }: TranslationBoxProps) => {
+const TranslationBox = ({ text, isActive, isLoading }: TranslationBoxProps) => {
   return (
     <div className="w-full rounded-lg border border-border bg-card p-6 shadow-sm min-h-[140px] relative">
       <div className="flex items-center gap-2 mb-3">
