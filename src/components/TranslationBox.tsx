@@ -22,8 +22,11 @@ const TranslationBox = ({ text, isActive, isLoading }: TranslationBoxProps) => {
       <p className="text-lg leading-relaxed text-foreground min-h-[60px]">
         {text || (
           <span className="text-muted-foreground italic">
-            {isActive ? "Aguardando gestos..." : "A tradução aparecerá aqui"}
+            {isActive ? "Aguardando resposta da IA..." : "A tradução aparecerá aqui"}
           </span>
+        )}
+        {isLoading && isActive && text && (
+          <span className="inline-block ml-1 w-2 h-5 bg-primary animate-pulse" />
         )}
       </p>
     </div>
