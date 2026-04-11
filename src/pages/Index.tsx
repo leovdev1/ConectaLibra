@@ -1,44 +1,58 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Play, Square, Hand } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import VideoCapture from "@/components/VideoCapture";
 import TranslationBox from "@/components/TranslationBox";
-
-const samplePhrases = [
-  "Olá, tudo bem?",
-  "Olá, tudo bem? Meu nome é João.",
-  "Olá, tudo bem? Meu nome é João. Prazer em conhecê-lo.",
-  "Olá, tudo bem? Meu nome é João. Prazer em conhecê-lo. Como posso ajudar?",
-];
+import { translateFromLibras } from "@/lib/gemini";
 
 const Index = () => {
   const [isTranslating, setIsTranslating] = useState(false);
   const [translationText, setTranslationText] = useState("");
-  const [phraseIndex, setPhraseIndex] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
+  const isTranslatingRef = useRef(false);
+  const translationRef = useRef("");
+
+  const fetchNextTranslation = useCallback(async () => {
+    if (!isTranslatingRef.current) return;
+    setIsLoading(true);
+    try {
+      const result = await translateFromLibras(translationRef.current || undefined);
+      if (!isTranslatingRef.current) return;
+      const newText = translationRef.current
+        ? `${translationRef.current} ${result}`
+        : result;
+      translationRef.current = newText;
+      setTranslationText(newText);
+    } catch (error) {
+      console.error("Erro na tradução:", error);
+      if (isTranslatingRef.current) {
+        toast.error("Erro ao traduzir. Tentando novamente...");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (!isTranslating) return;
-    const interval = setInterval(() => {
-      setPhraseIndex((prev) => {
-        const next = Math.min(prev + 1, samplePhrases.length - 1);
-        setTranslationText(samplePhrases[next]);
-        return next;
-      });
-    }, 2500);
-    // Set first phrase immediately
-    setTranslationText(samplePhrases[0]);
+    
+    // Fetch immediately, then every 4 seconds
+    fetchNextTranslation();
+    const interval = setInterval(fetchNextTranslation, 4000);
     return () => clearInterval(interval);
-  }, [isTranslating]);
+  }, [isTranslating, fetchNextTranslation]);
 
   const handleStart = useCallback(() => {
+    isTranslatingRef.current = true;
+    translationRef.current = "";
     setIsTranslating(true);
-    setPhraseIndex(0);
     setTranslationText("");
-    toast.success("Tradução iniciada!");
+    toast.success("Tradução iniciada! Conectando ao Gemini AI...");
   }, []);
 
   const handleStop = useCallback(() => {
+    isTranslatingRef.current = false;
     setIsTranslating(false);
     if (translationText) {
       toast.success("Tradução salva com sucesso!");
@@ -66,7 +80,7 @@ const Index = () => {
       <main className="container max-w-3xl mx-auto px-4 py-8 flex flex-col gap-6 animate-fade-in-up">
         <VideoCapture isActive={isTranslating} />
 
-        <TranslationBox text={translationText} isActive={isTranslating} />
+        <TranslationBox text={translationText} isActive={isTranslating} isLoading={isLoading} />
 
         {/* Action buttons */}
         <div className="flex gap-3 justify-center">

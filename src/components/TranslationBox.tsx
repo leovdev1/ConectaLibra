@@ -3,9 +3,10 @@ import { Languages } from "lucide-react";
 interface TranslationBoxProps {
   text: string;
   isActive: boolean;
+  isLoading?: boolean;
 }
 
-const TranslationBox = ({ text, isActive }: TranslationBoxProps) => {
+const TranslationBox = ({ text, isActive, isLoading }: TranslationBoxProps) => {
   return (
     <div className="w-full rounded-lg border border-border bg-card p-6 shadow-sm min-h-[140px] relative">
       <div className="flex items-center gap-2 mb-3">
@@ -21,8 +22,11 @@ const TranslationBox = ({ text, isActive }: TranslationBoxProps) => {
       <p className="text-lg leading-relaxed text-foreground min-h-[60px]">
         {text || (
           <span className="text-muted-foreground italic">
-            {isActive ? "Aguardando gestos..." : "A tradução aparecerá aqui"}
+            {isActive ? "Aguardando resposta da IA..." : "A tradução aparecerá aqui"}
           </span>
+        )}
+        {isLoading && isActive && text && (
+          <span className="inline-block ml-1 w-2 h-5 bg-primary animate-pulse" />
         )}
       </p>
     </div>
