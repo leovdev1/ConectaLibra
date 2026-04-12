@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { Video, VideoOff, Camera } from "lucide-react";
+import { useEffect, useRef, useState, useCallback } from "react";
+import { VideoOff, Camera } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface VideoCaptureProps {
@@ -10,33 +10,9 @@ const VideoCapture = ({ isActive }: VideoCaptureProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
-  const [manualRetry, setManualRetry] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
 
-  const startCamera = () => {
-    navigator.mediaDevices
-      .getUserMedia({ video: { facingMode: "user" }, audio: false })
-      .then((stream) => {
-        streamRef.current = stream;
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-        }
-        setCameraError(null);
-        setManualRetry(false);
-      })
-      .catch((err) => {
-        console.error("Erro ao acessar câmera:", err);
-        if (err.name === "NotAllowedError") {
-          setCameraError("Permissão negada. Habilite a câmera nas configurações do navegador.");
-        } else if (err.name === "NotFoundError") {
-          setCameraError("Câmera não encontrada.");
-        } else {
-          setCameraError("Não foi possível acessar a câmera.");
-        }
-        setManualRetry(true);
-      });
-  };
-
-  const stopCamera = () => {
+  const stopCamera = useCallback(() => {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
@@ -44,9 +20,52 @@ const VideoCapture = ({ isActive }: VideoCaptureProps) => {
     if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
+    setCameraReady(false);
     setCameraError(null);
-    setManualRetry(false);
-  };
+  }, []);
+
+  const startCamera = useCallback(async () => {
+    // Stop any existing stream first
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+
+    try {
+      console.log("📷 Requesting camera access...");
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false,
+      });
+      console.log("✅ Camera stream obtained:", stream.getVideoTracks()[0]?.label);
+
+      streamRef.current = stream;
+
+      // Ensure video element exists and attach stream
+      const video = videoRef.current;
+      if (video) {
+        video.srcObject = stream;
+        // Force play after metadata loads
+        video.onloadedmetadata = () => {
+          console.log("✅ Video metadata loaded, playing...");
+          video.play().catch((e) => console.warn("Auto-play blocked:", e));
+        };
+      }
+
+      setCameraError(null);
+      setCameraReady(true);
+    } catch (err: any) {
+      console.error("❌ Camera error:", err.name, err.message);
+      if (err.name === "NotAllowedError") {
+        setCameraError("Permissão negada. Habilite a câmera nas configurações do navegador.");
+      } else if (err.name === "NotFoundError") {
+        setCameraError("Câmera não encontrada.");
+      } else {
+        setCameraError(`Não foi possível acessar a câmera: ${err.message}`);
+      }
+      setCameraReady(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (isActive) {
@@ -54,36 +73,36 @@ const VideoCapture = ({ isActive }: VideoCaptureProps) => {
     } else {
       stopCamera();
     }
-
     return () => {
       stopCamera();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isActive]);
 
   return (
     <div className="relative w-full aspect-video rounded-lg overflow-hidden bg-video-bg shadow-lg">
       {isActive ? (
         <>
-          {cameraError ? (
+          {/* Always render video element so ref is available */}
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            className={`absolute inset-0 w-full h-full object-cover ${cameraError ? "hidden" : ""}`}
+            style={{ transform: "scaleX(-1)" }}
+          />
+
+          {cameraError && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-destructive">
-              <p className="text-sm font-medium">{cameraError}</p>
-              {manualRetry && (
-                <Button size="sm" variant="outline" onClick={startCamera} className="gap-2">
-                  <Camera className="w-4 h-4" />
-                  Ativar Câmera
-                </Button>
-              )}
+              <p className="text-sm font-medium text-center px-4">{cameraError}</p>
+              <Button size="sm" variant="outline" onClick={startCamera} className="gap-2">
+                <Camera className="w-4 h-4" />
+                Ativar Câmera
+              </Button>
             </div>
-          ) : (
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              muted
-              className="absolute inset-0 w-full h-full object-cover"
-              style={{ transform: "scaleX(-1)" }}
-            />
           )}
+
           {/* Recording indicator */}
           <div className="absolute top-4 left-4 flex items-center gap-2 z-10">
             <span className="w-3 h-3 rounded-full bg-destructive animate-pulse" />
