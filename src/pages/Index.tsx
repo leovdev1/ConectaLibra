@@ -22,7 +22,7 @@ const Index = () => {
     }
 
     let cancelled = false;
-    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let timeoutId: number | null = null;
 
     const runTranslationCycle = async () => {
       if (cancelled || !isTranslatingRef.current || requestInFlightRef.current) return;
