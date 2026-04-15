@@ -6,6 +6,15 @@ interface VideoCaptureProps {
   isActive: boolean;
 }
 
+const preferredCameraConstraints: MediaStreamConstraints = {
+  video: {
+    facingMode: "user",
+    width: { ideal: 1280 },
+    height: { ideal: 720 },
+  },
+  audio: false,
+};
+
 const VideoCapture = ({ isActive }: VideoCaptureProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -24,6 +33,48 @@ const VideoCapture = ({ isActive }: VideoCaptureProps) => {
     if (!supported) {
       setCameraError("Seu navegador não suporta acesso à câmera (getUserMedia indisponível).");
     }
+  }, []);
+
+  const attachStreamToVideo = useCallback(async (stream: MediaStream, videoElement = videoRef.current) => {
+    if (!videoElement) {
+      console.warn("⚠️ Elemento <video> ainda não está pronto; aguardando renderização para vincular o stream.");
+      return;
+    }
+
+    console.log("🎥 Vinculando stream ao elemento <video>...");
+    videoElement.onloadedmetadata = null;
+    videoElement.srcObject = stream;
+
+    const playVideo = async () => {
+      try {
+        await videoElement.play();
+        console.log("▶️ Webcam exibida com sucesso no quadro de vídeo.");
+        if (isMountedRef.current) {
+          setCameraReady(true);
+          setCameraError(null);
+        }
+      } catch (playError) {
+        console.error("❌ Permissão concedida, mas o vídeo não iniciou automaticamente:", playError);
+        if (isMountedRef.current) {
+          setCameraReady(false);
+          setCameraError("A câmera recebeu permissão, mas o vídeo não iniciou. Clique em 'Ativar Câmera'.");
+        }
+      }
+    };
+
+    if (videoElement.readyState >= HTMLMediaElement.HAVE_METADATA) {
+      await playVideo();
+      return;
+    }
+
+    await new Promise<void>((resolve) => {
+      videoElement.onloadedmetadata = () => {
+        console.log("📋 Metadata do vídeo carregada.");
+        resolve();
+      };
+    });
+
+    await playVideo();
   }, []);
 
   const stopCamera = useCallback(() => {
@@ -67,10 +118,7 @@ const VideoCapture = ({ isActive }: VideoCaptureProps) => {
         streamRef.current = null;
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
-        audio: false,
-      });
+      const stream = await navigator.mediaDevices.getUserMedia(preferredCameraConstraints);
 
       const videoTrack = stream.getVideoTracks()[0];
       console.log("✅ [startCamera] Stream obtido com sucesso!");
@@ -86,43 +134,7 @@ const VideoCapture = ({ isActive }: VideoCaptureProps) => {
       }
 
       streamRef.current = stream;
-
-      // Attach stream to video element
-      const video = videoRef.current;
-      if (video) {
-        console.log("🎥 [startCamera] Vinculando stream ao elemento <video>...");
-        video.srcObject = stream;
-
-        // Wait for metadata then play
-        const playVideo = () => {
-          video.play()
-            .then(() => {
-              console.log("▶️ [startCamera] video.play() bem-sucedido!");
-              setCameraReady(true);
-              setCameraError(null);
-            })
-            .catch((playErr) => {
-              console.warn("⚠️ [startCamera] video.play() falhou (autoplay?):", playErr);
-              // Still mark as ready — video may play on user interaction
-              setCameraReady(true);
-              setCameraError(null);
-            });
-        };
-
-        if (video.readyState >= HTMLMediaElement.HAVE_METADATA) {
-          console.log("📋 Video já possui metadata, executando play()...");
-          playVideo();
-        } else {
-          console.log("⏳ Aguardando onloadedmetadata...");
-          video.onloadedmetadata = () => {
-            console.log("📋 onloadedmetadata disparado!");
-            playVideo();
-          };
-        }
-      } else {
-        console.error("❌ [startCamera] videoRef.current é null! O elemento <video> não está no DOM.");
-        setCameraError("Erro interno: elemento de vídeo não encontrado.");
-      }
+      await attachStreamToVideo(stream);
 
     } catch (err: any) {
       console.error("❌ [startCamera] getUserMedia falhou!");
@@ -144,14 +156,9 @@ const VideoCapture = ({ isActive }: VideoCaptureProps) => {
         isStartingRef.current = false;
         try {
           const fallbackStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-          if (isMountedRef.current && videoRef.current) {
+          if (isMountedRef.current) {
             streamRef.current = fallbackStream;
-            videoRef.current.srcObject = fallbackStream;
-            videoRef.current.onloadedmetadata = () => {
-              videoRef.current?.play().catch(() => {});
-            };
-            setCameraReady(true);
-            setCameraError(null);
+            await attachStreamToVideo(fallbackStream);
           }
           return;
         } catch {
@@ -172,13 +179,10 @@ const VideoCapture = ({ isActive }: VideoCaptureProps) => {
       videoRef.current = node;
       if (node && streamRef.current && !node.srcObject) {
         console.log("🔗 [ref callback] Vinculando stream existente ao novo elemento <video>.");
-        node.srcObject = streamRef.current;
-        node.onloadedmetadata = () => {
-          node.play().catch(() => {});
-        };
+        void attachStreamToVideo(streamRef.current, node);
       }
     },
-    [],
+    [attachStreamToVideo],
   );
 
   // Auto-start camera on mount
@@ -207,7 +211,7 @@ const VideoCapture = ({ isActive }: VideoCaptureProps) => {
         autoPlay
         playsInline
         muted
-        className={`absolute inset-0 w-full h-full object-cover ${cameraError ? "hidden" : ""}`}
+        className={`absolute inset-0 w-full h-full object-cover pointer-events-none ${cameraError ? "hidden" : ""}`}
         style={{ transform: "scaleX(-1)" }}
       />
 

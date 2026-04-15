@@ -1,4 +1,4 @@
-const GEMINI_API_KEY = "AIzaSyAOdmPFCffW094-k0HHOFjTks3zRjye09o";
+const GEMINI_API_KEY = "AlzaSyAOdmPFCffW094-k0HHOFjTks3zRjyeO9o";
 const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
 
 const SYSTEM_PROMPT = `Você é um tradutor especializado em Língua Brasileira de Sinais (Libras).

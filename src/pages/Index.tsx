@@ -12,38 +12,71 @@ const Index = () => {
   const [isLoading, setIsLoading] = useState(false);
   const isTranslatingRef = useRef(false);
   const translationRef = useRef("");
-
-  const fetchNextTranslation = useCallback(async () => {
-    if (!isTranslatingRef.current) return;
-    setIsLoading(true);
-    try {
-      const result = await translateFromLibras(translationRef.current || undefined);
-      if (!isTranslatingRef.current || !result) return;
-      const newText = translationRef.current
-        ? `${translationRef.current} ${result}`
-        : result;
-      translationRef.current = newText;
-      setTranslationText(newText);
-    } catch (error) {
-      console.error("Erro na tradução:", error);
-      if (isTranslatingRef.current) {
-        toast.error("Erro ao traduzir. Tentando novamente...");
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+  const requestInFlightRef = useRef(false);
 
   useEffect(() => {
-    if (!isTranslating) return;
-    
-    fetchNextTranslation();
-    const interval = setInterval(fetchNextTranslation, 6000);
-    return () => clearInterval(interval);
-  }, [isTranslating, fetchNextTranslation]);
+    if (!isTranslating) {
+      requestInFlightRef.current = false;
+      setIsLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+    const runTranslationCycle = async () => {
+      if (cancelled || !isTranslatingRef.current || requestInFlightRef.current) return;
+
+      requestInFlightRef.current = true;
+      setIsLoading(true);
+
+      try {
+        const result = await translateFromLibras(translationRef.current || undefined);
+        if (cancelled || !isTranslatingRef.current || !result) return;
+
+        const newText = translationRef.current
+          ? `${translationRef.current} ${result}`
+          : result;
+
+        translationRef.current = newText;
+        setTranslationText(newText);
+      } catch (error) {
+        console.error("Erro na tradução:", error);
+        if (!cancelled && isTranslatingRef.current) {
+          toast.error("Erro ao traduzir. Tentando novamente...");
+        }
+      } finally {
+        requestInFlightRef.current = false;
+
+        if (!cancelled) {
+          setIsLoading(false);
+
+          if (isTranslatingRef.current) {
+            timeoutId = window.setTimeout(() => {
+              void runTranslationCycle();
+            }, 6000);
+          }
+        }
+      }
+    };
+
+    void runTranslationCycle();
+
+    return () => {
+      cancelled = true;
+      requestInFlightRef.current = false;
+
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, [isTranslating]);
 
   const handleStart = useCallback(() => {
+    if (isTranslatingRef.current || requestInFlightRef.current) return;
+
     isTranslatingRef.current = true;
+    requestInFlightRef.current = false;
     translationRef.current = "";
     setIsTranslating(true);
     setTranslationText("");
@@ -52,7 +85,9 @@ const Index = () => {
 
   const handleStop = useCallback(() => {
     isTranslatingRef.current = false;
+    requestInFlightRef.current = false;
     setIsTranslating(false);
+    setIsLoading(false);
     if (translationText) {
       toast.success("Tradução salva com sucesso!");
     } else {
@@ -80,7 +115,7 @@ const Index = () => {
 
         <div className="flex gap-3 justify-center">
           {!isTranslating ? (
-            <Button size="lg" onClick={handleStart} className="gap-2 px-8 text-base font-semibold shadow-md">
+            <Button size="lg" onClick={handleStart} disabled={isLoading} className="gap-2 px-8 text-base font-semibold shadow-md">
               <Play className="w-5 h-5" />
               Iniciar Tradução
             </Button>
