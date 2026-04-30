@@ -54,7 +54,7 @@ const Index = () => {
           if (isTranslatingRef.current) {
             timeoutId = window.setTimeout(() => {
               void runTranslationCycle();
-            }, 6000);
+            }, 30000);
           }
         }
       }

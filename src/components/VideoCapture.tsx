@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useState, useEffect, useRef } from "react";
 import CameraStatusOverlay from "@/components/CameraStatusOverlay";
 import { useCameraStream } from "@/hooks/use-camera-stream";
 
@@ -10,22 +10,27 @@ const VideoCapture = ({ isActive }: VideoCaptureProps) => {
   const { cameraError, cameraReady, hasMediaSupport, requestCamera, setVideoElement } = useCameraStream();
   const [retryCount, setRetryCount] = useState(0);
 
-  const handleActivateClick = useCallback(() => {
+  const handleActivateClick = useCallback(async () => {
     setRetryCount((c) => c + 1);
-    void requestCamera();
+    try {
+      await requestCamera();
+    } catch (err) {
+      console.error("Erro ao ativar câmera:", err);
+    }
   }, [requestCamera]);
 
   return (
-    <div className="relative w-full aspect-video rounded-lg overflow-hidden bg-video-bg shadow-lg">
+    <div className="relative w-full aspect-video rounded-lg overflow-hidden bg-slate-950 shadow-xl border-2 border-slate-800">
       <video
         ref={setVideoElement}
         autoPlay
         playsInline
         muted
-        className="absolute inset-0 h-full w-full object-cover pointer-events-none"
+        className="absolute inset-0 h-full w-full object-cover"
         style={{ transform: "scaleX(-1)" }}
       />
 
+      {/* Camada de interface sobre o vídeo */}
       <CameraStatusOverlay
         cameraError={cameraError}
         cameraReady={cameraReady}
@@ -33,17 +38,11 @@ const VideoCapture = ({ isActive }: VideoCaptureProps) => {
         retryCount={retryCount}
         onActivate={handleActivateClick}
       />
-
+      
       {isActive && cameraReady && (
-        <div className="pointer-events-none">
-          <div className="absolute top-4 left-4 flex items-center gap-2 z-10">
-            <span className="w-3 h-3 rounded-full bg-destructive animate-pulse" />
-            <span className="text-primary-foreground text-sm font-medium tracking-wide drop-shadow">REC</span>
-          </div>
-          <div className="absolute top-3 left-3 w-6 h-6 border-t-2 border-l-2 border-primary/70 rounded-tl z-10" />
-          <div className="absolute top-3 right-3 w-6 h-6 border-t-2 border-r-2 border-primary/70 rounded-tr z-10" />
-          <div className="absolute bottom-3 left-3 w-6 h-6 border-b-2 border-l-2 border-primary/70 rounded-bl z-10" />
-          <div className="absolute bottom-3 right-3 w-6 h-6 border-b-2 border-r-2 border-primary/70 rounded-br z-10" />
+        <div className="absolute top-4 left-4 z-20 flex items-center gap-2 bg-black/50 p-2 rounded-full">
+          <span className="h-3 w-3 animate-pulse rounded-full bg-red-600" />
+          <span className="text-[10px] font-bold text-white uppercase tracking-widest">Traduzindo em tempo real</span>
         </div>
       )}
     </div>
