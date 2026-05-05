@@ -1,4 +1,4 @@
-import { useCallback, useState, useEffect, useRef } from "react";
+import { useCallback, useState, useRef, forwardRef, useImperativeHandle } from "react";
 import CameraStatusOverlay from "@/components/CameraStatusOverlay";
 import { useCameraStream } from "@/hooks/use-camera-stream";
 
@@ -6,9 +6,40 @@ interface VideoCaptureProps {
   isActive: boolean;
 }
 
-const VideoCapture = ({ isActive }: VideoCaptureProps) => {
+// Usamos forwardRef para que o Index.tsx consiga chamar a função getFrame()
+const VideoCapture = forwardRef(({ isActive }: VideoCaptureProps, ref) => {
   const { cameraError, cameraReady, hasMediaSupport, requestCamera, setVideoElement } = useCameraStream();
   const [retryCount, setRetryCount] = useState(0);
+  
+  // Criamos uma referência local para o elemento de vídeo para o canvas conseguir ler os pixels
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  // Expõe a função getFrame para o componente pai
+  useImperativeHandle(ref, () => ({
+    getFrame: () => {
+      if (!videoRef.current || !cameraReady) return null;
+      
+      try {
+        const canvas = document.createElement("canvas");
+        // Captura a resolução real do vídeo
+        canvas.width = videoRef.current.videoWidth;
+        canvas.height = videoRef.current.videoHeight;
+        
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return null;
+
+        // Desenha o frame atual do vídeo no canvas
+        ctx.drawImage(videoRef.current, 0, 0);
+        
+        // Converte para base64 e remove o prefixo "data:image/jpeg;base64,"
+        // O Gemini espera apenas a string codificada
+        return canvas.toDataURL("image/jpeg", 0.7).split(",")[1];
+      } catch (err) {
+        console.error("Erro ao capturar frame:", err);
+        return null;
+      }
+    }
+  }));
 
   const handleActivateClick = useCallback(async () => {
     setRetryCount((c) => c + 1);
@@ -22,15 +53,17 @@ const VideoCapture = ({ isActive }: VideoCaptureProps) => {
   return (
     <div className="relative w-full aspect-video rounded-lg overflow-hidden bg-slate-950 shadow-xl border-2 border-slate-800">
       <video
-        ref={setVideoElement}
+        ref={(node) => {
+          setVideoElement(node); // Conecta ao hook de stream
+          videoRef.current = node; // Conecta à nossa ref local para o canvas
+        }}
         autoPlay
         playsInline
         muted
         className="absolute inset-0 h-full w-full object-cover"
-        style={{ transform: "scaleX(-1)" }}
+        style={{ transform: "scaleX(-1)" }} // Mantém o efeito de espelho
       />
 
-      {/* Camada de interface sobre o vídeo */}
       <CameraStatusOverlay
         cameraError={cameraError}
         cameraReady={cameraReady}
@@ -47,6 +80,9 @@ const VideoCapture = ({ isActive }: VideoCaptureProps) => {
       )}
     </div>
   );
-};
+});
+
+// Importante: definir um nome de exibição para depuração no React DevTools
+VideoCapture.displayName = "VideoCapture";
 
 export default VideoCapture;

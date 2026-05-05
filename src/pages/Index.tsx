@@ -10,9 +10,13 @@ const Index = () => {
   const [isTranslating, setIsTranslating] = useState(false);
   const [translationText, setTranslationText] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  
   const isTranslatingRef = useRef(false);
   const translationRef = useRef("");
   const requestInFlightRef = useRef(false);
+
+  // NOVO: Referência para acessar a função getFrame do VideoCapture
+  const videoCaptureRef = useRef<{ getFrame: () => string | null }>(null);
 
   useEffect(() => {
     if (!isTranslating) {
@@ -27,13 +31,27 @@ const Index = () => {
     const runTranslationCycle = async () => {
       if (cancelled || !isTranslatingRef.current || requestInFlightRef.current) return;
 
+      // NOVO: Captura o frame atual da câmera antes de chamar a API
+      const base64Image = videoCaptureRef.current?.getFrame();
+      
+      if (!base64Image) {
+        // Se a câmera não estiver pronta, tenta novamente em breve
+        timeoutId = window.setTimeout(() => {
+          void runTranslationCycle();
+        }, 1000);
+        return;
+      }
+
       requestInFlightRef.current = true;
       setIsLoading(true);
 
       try {
-        const result = await translateFromLibras(translationRef.current || undefined);
+        // AGORA: Passamos a imagem real para a função de tradução
+        const result = await translateFromLibras(base64Image);
+        
         if (cancelled || !isTranslatingRef.current || !result) return;
 
+        // Mantém o histórico do que já foi traduzido
         const newText = translationRef.current
           ? `${translationRef.current} ${result}`
           : result;
@@ -50,11 +68,10 @@ const Index = () => {
 
         if (!cancelled) {
           setIsLoading(false);
-
           if (isTranslatingRef.current) {
             timeoutId = window.setTimeout(() => {
               void runTranslationCycle();
-            }, 30000);
+            }, 3000);
           }
         }
       }
@@ -65,10 +82,7 @@ const Index = () => {
     return () => {
       cancelled = true;
       requestInFlightRef.current = false;
-
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
+      if (timeoutId) clearTimeout(timeoutId);
     };
   }, [isTranslating]);
 
@@ -80,7 +94,7 @@ const Index = () => {
     translationRef.current = "";
     setIsTranslating(true);
     setTranslationText("");
-    toast.success("Tradução iniciada! Conectando ao Gemini AI...");
+    toast.success("Tradução iniciada! Posicione-se em frente à câmera.");
   }, []);
 
   const handleStop = useCallback(() => {
@@ -89,7 +103,7 @@ const Index = () => {
     setIsTranslating(false);
     setIsLoading(false);
     if (translationText) {
-      toast.success("Tradução salva com sucesso!");
+      toast.success("Tradução finalizada!");
     } else {
       toast.info("Tradução encerrada.");
     }
@@ -104,13 +118,15 @@ const Index = () => {
           </div>
           <div>
             <h1 className="text-lg font-bold text-foreground leading-tight">Tradutor de Libras</h1>
-            <p className="text-xs text-muted-foreground">Tradução em tempo real de Língua Brasileira de Sinais</p>
+            <p className="text-xs text-muted-foreground">Tecnologia ConectaLibra - IA em tempo real</p>
           </div>
         </div>
       </header>
 
       <main className="container max-w-3xl mx-auto px-4 py-8 flex flex-col gap-6 animate-fade-in-up">
-        <VideoCapture isActive={isTranslating} />
+        {/* NOVO: Passamos a ref para o componente de vídeo */}
+        <VideoCapture ref={videoCaptureRef} isActive={isTranslating} />
+        
         <TranslationBox text={translationText} isActive={isTranslating} isLoading={isLoading} />
 
         <div className="flex gap-3 justify-center">
